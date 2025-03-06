@@ -117,7 +117,7 @@ bot.callbackQuery(
     const { label } = sexes.find(({ data }) => data === ctx.match)
     ctx.session.sex = label
     await ctx.reply(
-      'Осталось определиться с размером. Можно выбрать несколько:',
+      'Осталось определиться с размером. Нужно указать длину стопы в сантиметрах. Можно выбрать несколько значений:',
       { reply_markup: sizeKeyboard }
     )
     await ctx.answerCallbackQuery()
@@ -166,7 +166,7 @@ bot.callbackQuery('confirm', async (ctx) => {
     }
   } else if (sex) {
     await ctx.reply(
-      'Осталось определиться с размером. Можно выбрать несколько:',
+      'Осталось определиться с размером. Нужно указать длину стопы в сантиметрах. Можно выбрать несколько значений:',
       { reply_markup: sizeKeyboard }
     )
   } else if (brands.length) {
@@ -257,7 +257,9 @@ bot.command('subscriptions', async (ctx) => {
 
       Object.assign(result, {
         [brandKey]: {
+          ...result[brandKey],
           [sexKey]: {
+            ...result[brandKey]?.[sexKey],
             [sizeKey]: count + 1
           }
         }
@@ -268,8 +270,8 @@ bot.command('subscriptions', async (ctx) => {
     {}
   )
 
-  if (Object.values(subscriptions).length) {
-    await ctx.reply(ctx.from.id, 'Нет текущих подписок.')
+  if (!Object.values(subscriptions).length) {
+    await ctx.reply('Нет текущих подписок.')
   }
 
   for (const [brandKey, brandValue] of Object.entries(subscriptions)) {
@@ -282,6 +284,7 @@ bot.command('subscriptions', async (ctx) => {
         const size = sizes.find(({ data }) => data === sizeKey).label
         reply += `${size}: ${count}\n`
       })
+      reply += '\n'
     }
 
     if (brandValue.female) {
@@ -292,7 +295,7 @@ bot.command('subscriptions', async (ctx) => {
       })
     }
 
-    await ctx.reply(ctx.from.id, reply)
+    await ctx.reply(reply)
   }
 })
 
