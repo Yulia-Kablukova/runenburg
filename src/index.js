@@ -248,12 +248,6 @@ bot.command('subscriptions', async (ctx) => {
     return
   }
 
-  /*  const subscriptions = (await getSubscriptions())
-    .map(({ sex, brand, size }, index) => {
-      return `${index + 1}) ${brand} ${size} ${sex}`
-    })
-    .join('\n')*/
-
   const subscriptions = (await getSubscriptions()).reduce(
     (result, { sex, brand, size }) => {
       const brandKey = brands.find(({ label }) => label === brand).data
@@ -274,23 +268,23 @@ bot.command('subscriptions', async (ctx) => {
     {}
   )
 
-  for (const { key, value } of Object.entries(subscriptions)) {
-    const brand = brands.find(({ data }) => data === key).label
+  for (const [brandKey, brandValue] of Object.entries(subscriptions)) {
+    const brand = brands.find(({ data }) => data === brandKey).label
     let reply = ''
 
-    if (value.male) {
+    if (brandValue.male) {
       reply += `${brand} М\n`
-      Object.entries(value.male).forEach(({ key, value }) => {
-        const size = sizes.find(({ data }) => data === key).label
-        reply += `${size}: ${value}\n`
+      Object.entries(brandValue.male).forEach(([sizeKey, count]) => {
+        const size = sizes.find(({ data }) => data === sizeKey).label
+        reply += `${size}: ${count}\n`
       })
     }
 
-    if (value.female) {
+    if (brandValue.female) {
       reply += `${brand} Ж\n`
-      Object.entries(value.female).forEach(({ key, value }) => {
-        const size = sizes.find(({ data }) => data === key).label
-        reply += `${size}: ${value}\n`
+      Object.entries(brandValue.female).forEach(([sizeKey, count]) => {
+        const size = sizes.find(({ data }) => data === sizeKey).label
+        reply += `${size}: ${count}\n`
       })
     }
 
