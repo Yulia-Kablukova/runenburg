@@ -248,13 +248,54 @@ bot.command('subscriptions', async (ctx) => {
     return
   }
 
-  const subscriptions = (await getSubscriptions())
+  /*  const subscriptions = (await getSubscriptions())
     .map(({ sex, brand, size }, index) => {
       return `${index + 1}) ${brand} ${size} ${sex}`
     })
-    .join('\n')
+    .join('\n')*/
 
-  await ctx.api.sendMessage(ctx.from.id, subscriptions || 'Нет текущих подписок.')
+  const subscriptions = (await getSubscriptions()).reduce(
+    (result, { sex, brand, size }) => {
+      const brandKey = brands.find(({ label }) => label === brand).data
+      const sexKey = sex === 'Мужской' ? 'male' : 'female'
+      const sizeKey = sizes.find(({ label }) => label === size).data
+      const count = result[brandKey]?.[sexKey]?.[sizeKey] || 0
+
+      Object.assign(result, {
+        [brandKey]: {
+          [sexKey]: {
+            [sizeKey]: count + 1
+          }
+        }
+      })
+
+      return result
+    },
+    {}
+  )
+
+  for (const { key, value } of Object.entries(subscriptions)) {
+    const brand = brands.find(({ data }) => data === key).label
+    let reply = ''
+
+    if (value.male) {
+      reply += `${brand} М\n`
+      Object.entries(value.male).forEach(({ key, value }) => {
+        const size = sizes.find(({ data }) => data === key).label
+        reply += `${size}: ${value}\n`
+      })
+    }
+
+    if (value.female) {
+      reply += `${brand} Ж\n`
+      Object.entries(value.female).forEach(({ key, value }) => {
+        const size = sizes.find(({ data }) => data === key).label
+        reply += `${size}: ${value}\n`
+      })
+    }
+
+    await ctx.reply(ctx.from.id, reply || 'Нет текущих подписок.')
+  }
 })
 
 bot.command('users', async (ctx) => {
@@ -267,10 +308,13 @@ bot.command('users', async (ctx) => {
     return
   }
 
-  const users = (await getUsers())
-    .map(({ id, name, username }, index) => `${index + 1}) ${name} (@${username})`)
-    .join('\n')
-  await ctx.reply(users)
+  const users = (await getUsers()).map(
+    ({ name, username }, index) => `${index + 1}) ${name} (@${username})`
+  )
+
+  for (let i = 0; i < users.length; i += 100) {
+    await ctx.reply(users.slice(i, i + 100).join('\n'))
+  }
 })
 
 bot.command('clear', async (ctx) => {
@@ -328,10 +372,14 @@ bot.callbackQuery('send', async (ctx) => {
 
   for (const user of users) {
     if (message.photo) {
-      await ctx.api.sendPhoto(user.chat_id, message.photo[message.photo.length - 1].file_id, {
-        caption: message.caption,
-        reply_markup: contactKeyboard
-      })
+      await ctx.api.sendPhoto(
+        user.chat_id,
+        message.photo[message.photo.length - 1].file_id,
+        {
+          caption: message.caption,
+          reply_markup: contactKeyboard
+        }
+      )
       await ctx.api.send
     }
     if (message.text) {
