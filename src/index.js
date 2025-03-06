@@ -254,7 +254,7 @@ bot.command('subscriptions', async (ctx) => {
     })
     .join('\n')
 
-  await ctx.reply(subscriptions || 'Нет текущих подписок.')
+  await ctx.api.sendMessage(ctx.from.id, subscriptions || 'Нет текущих подписок.')
 })
 
 bot.command('users', async (ctx) => {
@@ -268,7 +268,7 @@ bot.command('users', async (ctx) => {
   }
 
   const users = (await getUsers())
-    .map(({ name, username }, index) => `${index + 1}) ${name} (@${username})`)
+    .map(({ id, name, username }, index) => `${index + 1}) ${name} (@${username})`)
     .join('\n')
   await ctx.reply(users)
 })
@@ -328,7 +328,7 @@ bot.callbackQuery('send', async (ctx) => {
 
   for (const user of users) {
     if (message.photo) {
-      await ctx.api.sendPhoto(user.chat_id, message.photo, {
+      await ctx.api.sendPhoto(user.chat_id, message.photo[message.photo.length - 1].file_id, {
         caption: message.caption,
         reply_markup: contactKeyboard
       })

@@ -39,7 +39,7 @@ export async function createUser(id, chat_id, username, name) {
 }
 
 export async function getUsers() {
-  return await db.all('SELECT username, name FROM users')
+  return await db.all('SELECT id, username, name FROM users')
 }
 
 export async function createSubscription(chat_id, sex, brand, size) {
