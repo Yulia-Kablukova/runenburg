@@ -268,6 +268,10 @@ bot.command('subscriptions', async (ctx) => {
     {}
   )
 
+  if (Object.values(subscriptions).length) {
+    await ctx.reply(ctx.from.id, 'Нет текущих подписок.')
+  }
+
   for (const [brandKey, brandValue] of Object.entries(subscriptions)) {
     const brand = brands.find(({ data }) => data === brandKey).label
     let reply = ''
@@ -288,7 +292,7 @@ bot.command('subscriptions', async (ctx) => {
       })
     }
 
-    await ctx.reply(ctx.from.id, reply || 'Нет текущих подписок.')
+    await ctx.reply(ctx.from.id, reply)
   }
 })
 
