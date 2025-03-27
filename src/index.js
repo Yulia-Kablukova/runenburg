@@ -310,7 +310,7 @@ bot.command('users', async (ctx) => {
   }
 
   const users = (await getUsers()).map(
-    ({ name, username }, index) => `${index + 1}) ${name} (@${username})`
+    ({ name, username }, index) => `${index + 1}) ${name.replace('undefined', '')} (@${username})`
   )
 
   for (let i = 0; i < users.length; i += 100) {
