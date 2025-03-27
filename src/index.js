@@ -310,7 +310,8 @@ bot.command('users', async (ctx) => {
   }
 
   const users = (await getUsers()).map(
-    ({ name, username }, index) => `${index + 1}) ${name.replace('undefined', '')} (@${username})`
+    ({ name, username }, index) =>
+      `${index + 1}) ${name.replace('undefined', '')} (@${username})`
   )
 
   for (let i = 0; i < users.length; i += 100) {
@@ -373,20 +374,27 @@ bot.callbackQuery('send', async (ctx) => {
 
   for (const user of users) {
     if (message.photo) {
-      await ctx.api.sendPhoto(
-        user.chat_id,
-        message.photo[message.photo.length - 1].file_id,
-        {
-          caption: message.caption,
-          reply_markup: contactKeyboard
-        }
-      )
-      await ctx.api.send
+      try {
+        await ctx.api.sendPhoto(
+          user.chat_id,
+          message.photo[message.photo.length - 1].file_id,
+          {
+            caption: message.caption,
+            reply_markup: contactKeyboard
+          }
+        )
+      } catch (e) {
+        console.log(e + ' from ' + user)
+      }
     }
     if (message.text) {
-      await ctx.api.sendMessage(user.chat_id, message.text, {
-        reply_markup: contactKeyboard
-      })
+      try {
+        await ctx.api.sendMessage(user.chat_id, message.text, {
+          reply_markup: contactKeyboard
+        })
+      } catch (e) {
+        console.log(e + ' from ' + user)
+      }
     }
   }
 
