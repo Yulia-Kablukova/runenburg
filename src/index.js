@@ -1,27 +1,19 @@
 import 'dotenv/config'
-import { Bot, GrammyError, HttpError, InlineKeyboard, session } from 'grammy'
+import { Bot, GrammyError, HttpError, session } from 'grammy'
 import {
-  createSubscription,
-  createUser,
   deleteSubscription,
   deleteChatSubscriptions,
   getSubscriptionChats,
-  getSubscriptions,
-  getUsers,
   getChatSubscriptions,
-  initDatabase
+  initDatabase,
+  getSetting,
+  updateSetting
 } from './db/index.js'
-import {
-  brands,
-  brandsKeyboard,
-  confirmKeyboard,
-  contactKeyboard,
-  postKeyboard,
-  sexes,
-  sexKeyboard,
-  sizeKeyboard,
-  sizes
-} from './keyboards/index.js'
+import { contactKeyboard, postKeyboard } from './keyboards/index.js'
+import user_subscriptions from './commands/user/subscriptions.js'
+import user_calculator from './commands/user/calculator.js'
+import admin_subscriptions from './commands/admin/subscriptions.js'
+import admin_calculator from './commands/admin/calculator.js'
 
 await initDatabase()
 
@@ -33,19 +25,35 @@ bot.use(
       brands: [],
       sex: null,
       sizes: [],
-      message: null
+      message: null,
+      command: null,
+      price: null
     })
   })
 )
 
+bot.use(user_subscriptions)
+bot.use(admin_subscriptions)
+bot.use(user_calculator)
+bot.use(admin_calculator)
+
 bot.start()
 
-bot.api.setMyCommands([
-  { command: 'subscribe', description: 'Добавить подписку' },
-  { command: 'my_subscriptions', description: 'Показать текущие подписки' },
-  { command: 'unsubscribe', description: 'Отписаться от рассылки' },
-  { command: 'help', description: 'Ничего не понимаю 🥲' }
-])
+bot.api.setMyCommands(
+  [
+    {
+      command: 'calculate_price',
+      description: 'Рассчитать цену с сайта Tradeinn'
+    },
+    { command: 'subscribe', description: 'Добавить подписку' },
+    { command: 'my_subscriptions', description: 'Показать текущие подписки' },
+    { command: 'unsubscribe', description: 'Отписаться от рассылки' },
+    { command: 'help', description: 'Ничего не понимаю 🥲' }
+  ],
+  {
+    scope: { type: 'all_private_chats' }
+  }
+)
 
 bot.catch((err) => {
   const ctx = err.ctx
@@ -61,282 +69,63 @@ bot.catch((err) => {
   }
 })
 
-const helpText =
-  'Бот с лучшими предложениями на беговые кроссовки 👟\n\n' +
-  'Доступные команды:\n' +
-  '/subscribe - добавить подписку\n' +
-  '/my_subscriptions - показать текущие подписки\n' +
-  '/unsubscribe - отписаться от рассылки\n\n' +
-  'Что-то не получается? Обратись в тех. поддержку, разберемся: @djull_zzz'
-
-bot.command('start', async (ctx) => {
-  await ctx.reply(helpText)
-
-  const { id, username, first_name, last_name } = ctx.from
-  await createUser(
-    id,
-    ctx.chatId,
-    username,
-    `${first_name} ${last_name}`.trim()
-  )
-})
-
-bot.command('subscribe', async (ctx) => {
-  if (process.env.ADMIN_ID === ctx.from.id.toString()) {
-    await ctx.reply(
-      'Вы администратор. Подписаться на рассылку может только обычный пользователь 👀'
-    )
-    return
-  }
-
-  await ctx.reply(
-    'Чтобы подписаться на рассылку, нужно указать бренд кроссовок, пол и размер.\n\nВыберите один или несколько брендов и нажмите кноку Подтвердить:',
-    { reply_markup: brandsKeyboard }
-  )
-})
-
-bot.callbackQuery(
-  brands.map(({ data }) => data),
-  async (ctx) => {
-    const { label } = brands.find(({ data }) => data === ctx.match)
-
-    if (!ctx.session.brands.includes(label)) {
-      ctx.session.brands.push(label)
-    }
-    await ctx.reply(
-      `Вы выбрали следующие бренды: ${ctx.session.brands.join(', ')}. Выберите еще один бренд или нажмите кнопку Подтвердить.`,
-      { reply_markup: confirmKeyboard }
-    )
-    await ctx.answerCallbackQuery()
-  }
-)
-
-bot.callbackQuery(
-  sexes.map(({ data }) => data),
-  async (ctx) => {
-    const { label } = sexes.find(({ data }) => data === ctx.match)
-    ctx.session.sex = label
-    await ctx.reply(
-      'Осталось определиться с размером. Нужно указать длину стопы в сантиметрах. Можно выбрать несколько значений:',
-      { reply_markup: sizeKeyboard }
-    )
-    await ctx.answerCallbackQuery()
-  }
-)
-
-bot.callbackQuery(
-  sizes.map(({ data }) => data),
-  async (ctx) => {
-    const { label } = sizes.find(({ data }) => data === ctx.match)
-
-    if (!ctx.session.sizes.includes(label)) {
-      ctx.session.sizes.push(label)
-    }
-    await ctx.reply(
-      `Вы выбрали следующие размеры: ${ctx.session.sizes.join('; ')}. Выберите еще один размер или нажмите кнопку Подтвердить.`,
-      { reply_markup: confirmKeyboard }
-    )
-    await ctx.answerCallbackQuery()
-  }
-)
-
-bot.callbackQuery('confirm', async (ctx) => {
-  const { brands, sex, sizes } = ctx.session
-  if (sizes.length) {
-    if (process.env.ADMIN_ID === ctx.from.id.toString()) {
-      await ctx.reply(
-        `Данные успешно собраны.\n\nБренд: ${ctx.session.brands.join('; ')}\nРазмер: ${ctx.session.sizes.join('; ')}\nПол: ${ctx.session.sex}\n\nВведите сообщение для рассылки или отправьте команду /clear для очистки данных.`
-      )
-      await ctx.answerCallbackQuery()
-      return
-    }
-
-    brands.forEach((brand) => {
-      sizes.forEach(async (size) => {
-        await createSubscription(ctx.chatId, sex, brand, size)
-      })
-    })
-
-    await ctx.reply('Подписка успешно оформлена!')
-    ctx.session = {
-      brands: [],
-      sex: null,
-      sizes: [],
-      message: null
-    }
-  } else if (sex) {
-    await ctx.reply(
-      'Осталось определиться с размером. Нужно указать длину стопы в сантиметрах. Можно выбрать несколько значений:',
-      { reply_markup: sizeKeyboard }
-    )
-  } else if (brands.length) {
-    await ctx.reply('Отлично! Выберите пол:', { reply_markup: sexKeyboard })
-  }
-  await ctx.answerCallbackQuery()
-})
-
-bot.command('my_subscriptions', async (ctx) => {
-  if (process.env.ADMIN_ID === ctx.from.id.toString()) {
-    await ctx.reply(
-      'Для просмотра текущих подписок используйте команду /subscriptions'
-    )
-    return
-  }
-
-  const subscriptions = (await getChatSubscriptions(ctx.chatId))
-    .map(({ sex, brand, size }, index) => {
-      return `${index + 1}) ${brand} ${size} ${sex}`
-    })
-    .join('\n\n')
-
-  await ctx.reply(
-    subscriptions ||
-      'У вас нет текущих подписок.\n\nЧтобы подписаться на рассылку отправьте команду /subscribe'
-  )
-})
-
-bot.command('unsubscribe', async (ctx) => {
-  if (process.env.ADMIN_ID === ctx.from.id.toString()) {
-    await ctx.reply(
-      'Вы администратор. Отписаться от рассылки может только обычный пользователь 👀'
-    )
-    return
-  }
-
-  const subscriptions = (await getChatSubscriptions(ctx.chatId)).map(
-    ({ sex, brand, size }) => {
-      return `${brand} ${size} ${sex}`
-    }
-  )
-
-  const subscriptionsKeyboard = subscriptions.reduce(
-    (result, label, index) => result.text(label, `unsubscribe_${index}`).row(),
-    new InlineKeyboard()
-  )
-  subscriptionsKeyboard.text('Отписаться от всех', 'unsubscribe_all')
-
-  await ctx.reply(`Выберите рассылку, от которой хотите отписаться:`, {
-    reply_markup: subscriptionsKeyboard
-  })
-})
-
-bot.command('help', async (ctx) => {
-  await ctx.reply(helpText)
-})
-
-bot.command('post', async (ctx) => {
-  if (ctx.from.id.toString() !== process.env.ADMIN_ID) {
-    await ctx.reply('Не только лишь каждый способен выполнить эту команду.')
-    return
-  }
-
-  await ctx.reply(
-    'Чтобы отправить рассылку, нужно указать бренд кроссовок, пол и размер.\n\nВыберите один или несколько брендов и нажмите кноку Подтвердить:',
-    { reply_markup: brandsKeyboard }
-  )
-})
-
-bot.command('subscriptions', async (ctx) => {
-  if (
-    ![process.env.ADMIN_ID, process.env.TECH_SUPPORT_ID].includes(
-      ctx.from.id.toString()
-    )
-  ) {
-    await ctx.reply(
-      'Для просмотра текущих подписок отправьте команду /my_subscriptions'
-    )
-    return
-  }
-
-  const subscriptions = (await getSubscriptions()).reduce(
-    (result, { sex, brand, size }) => {
-      const brandKey = brands.find(({ label }) => label === brand).data
-      const sexKey = sex === 'Мужской' ? 'male' : 'female'
-      const sizeKey = sizes.find(({ label }) => label === size).data
-      const count = result[brandKey]?.[sexKey]?.[sizeKey] || 0
-
-      Object.assign(result, {
-        [brandKey]: {
-          ...result[brandKey],
-          [sexKey]: {
-            ...result[brandKey]?.[sexKey],
-            [sizeKey]: count + 1
-          }
-        }
-      })
-
-      return result
-    },
-    {}
-  )
-
-  if (!Object.values(subscriptions).length) {
-    await ctx.reply('Нет текущих подписок.')
-  }
-
-  for (const [brandKey, brandValue] of Object.entries(subscriptions)) {
-    const brand = brands.find(({ data }) => data === brandKey).label
-    let reply = ''
-
-    if (brandValue.male) {
-      reply += `${brand} М\n`
-      Object.entries(brandValue.male).forEach(([sizeKey, count]) => {
-        const size = sizes.find(({ data }) => data === sizeKey).label
-        reply += `${size}: ${count}\n`
-      })
-      reply += '\n'
-    }
-
-    if (brandValue.female) {
-      reply += `${brand} Ж\n`
-      Object.entries(brandValue.female).forEach(([sizeKey, count]) => {
-        const size = sizes.find(({ data }) => data === sizeKey).label
-        reply += `${size}: ${count}\n`
-      })
-    }
-
-    await ctx.reply(reply)
-  }
-})
-
-bot.command('users', async (ctx) => {
-  if (
-    ![process.env.ADMIN_ID, process.env.TECH_SUPPORT_ID].includes(
-      ctx.from.id.toString()
-    )
-  ) {
-    await ctx.reply('Не только лишь каждый способен выполнить эту команду.')
-    return
-  }
-
-  const users = (await getUsers()).map(
-    ({ name, username }, index) =>
-      `${index + 1}) ${name.replace('undefined', '')} (@${username})`
-  )
-
-  for (let i = 0; i < users.length; i += 100) {
-    await ctx.reply(users.slice(i, i + 100).join('\n'))
-  }
-})
-
-bot.command('clear', async (ctx) => {
-  if (ctx.from.id.toString() !== process.env.ADMIN_ID) {
-    await ctx.reply('Не только лишь каждый способен выполнить эту команду.')
-    return
-  }
-
-  ctx.session = {
-    brands: [],
-    sex: null,
-    sizes: [],
-    message: null
-  }
-  await ctx.reply(
-    'Начнем сначала?\n\nДля отправки рассылки воспользуйтесь командой /post'
-  )
-})
-
 bot.on('message', async (ctx) => {
+  if (ctx.session.command === 'set_rate') {
+    const newRate = parseFloat(ctx.msg.text)
+    if (isNaN(newRate)) {
+      return await ctx.reply('Неверный формат 💔\nПример: 100.02')
+    }
+
+    await updateSetting('rate', newRate)
+    ctx.session.command = null
+    return await ctx.reply(`Как скажешь! Установлен курс ${newRate}.`)
+  }
+
+  if (ctx.session.command === 'set_commission') {
+    const newCommission = parseFloat(ctx.msg.text)
+    if (isNaN(newCommission)) {
+      return await ctx.reply('Неверный формат 💔\nПример: 100.02')
+    }
+
+    await updateSetting('commission', newCommission)
+    ctx.session.command = null
+    return await ctx.reply(`Готово! Новая комиссия ${newCommission}%.`)
+  }
+
+  if (ctx.session.command === 'calculate_price') {
+    const price = parseFloat(ctx.msg.text)
+    if (isNaN(price)) {
+      return await ctx.reply('Неверный формат 💔\nПример: 102.99')
+    }
+    ctx.session.command = 'calculate_price_2'
+    ctx.session.price = price
+    return await ctx.reply(
+      'Ок! Теперь добавьте товар в корзину и перейдите в нее. Отправьте минимальную цену доставки из предложенных вариантов.'
+    )
+  }
+
+  if (ctx.session.command === 'calculate_price_2') {
+    const delivery = parseFloat(ctx.msg.text)
+    if (isNaN(delivery)) {
+      return await ctx.reply('Неверный формат 💔\nПример: 40.99')
+    }
+    const rate = await getSetting('rate')
+    const commission = await getSetting('commission')
+    const result =
+      Math.ceil(
+        ((ctx.session.price + delivery / 2) *
+          1.1 *
+          rate *
+          (1 + commission / 100)) /
+          100
+      ) * 100
+    ctx.session.command = null
+    ctx.session.price = null
+    return await ctx.reply(
+      `Итоговая цена с доставкой в РФ: ${result} руб.\nДля заказа обращайтесь к @temchik05. Приятных покупок!`
+    )
+  }
+
   if (ctx.from.id.toString() !== process.env.ADMIN_ID) {
     await ctx.reply(
       'Кажется, мы потеряли нить диалога 💔\n\nВоспользуйтесь командой /help или обратитесь в тех. поддержку (контакт в описании профиля).'

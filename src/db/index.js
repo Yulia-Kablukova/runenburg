@@ -26,6 +26,15 @@ export async function initDatabase() {
       UNIQUE (chat_id, sex, brand, size)
     )
     `)
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT NOT NULL,
+      value TEXT,
+      UNIQUE (key, value)
+    )
+    `)
 }
 
 export async function createUser(id, chat_id, username, name) {
@@ -78,4 +87,16 @@ export async function deleteSubscription(id) {
 
 export async function deleteChatSubscriptions(chat_id) {
   await db.run('DELETE FROM subscriptions WHERE chat_id = ?', chat_id)
+}
+
+export async function updateSetting(key, value) {
+  await db.run(
+    'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+    key,
+    value
+  )
+}
+
+export async function getSetting(key) {
+  return (await db.get(`SELECT value FROM settings WHERE key = ?`, key))?.value
 }
