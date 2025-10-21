@@ -111,7 +111,7 @@ bot.on('message', async (ctx) => {
     }
     const rate = await getSetting('rate')
     const commission = await getSetting('commission')
-    const result =
+    let result =
       Math.ceil(
         ((ctx.session.price + delivery / 2) *
           1.1 *
@@ -119,6 +119,9 @@ bot.on('message', async (ctx) => {
           (1 + commission / 100)) /
           100
       ) * 100
+    if (result < 10000) {
+      result += 500
+    }
     ctx.session.command = null
     ctx.session.price = null
     return await ctx.reply(
